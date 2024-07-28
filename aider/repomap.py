@@ -20,8 +20,29 @@ warnings.simplefilter("ignore", category=FutureWarning)
 from tree_sitter_languages import get_language, get_parser  # noqa: E402
 
 from aider.dump import dump  # noqa: F402,E402
+from pathlib import Path
+import fnmatch
 
 Tag = namedtuple("Tag", "rel_fname fname line name kind".split())
+
+def should_ignore(file_path, root):
+    path = Path(file_path)
+    relative_path = path.relative_to(root)
+    parts = relative_path.parts
+
+    for i in range(len(parts), 0, -1):
+        current_path = Path(root).joinpath(*parts[:i])
+        ignore_file = current_path / '.aiderignore'
+        
+        if ignore_file.exists():
+            with ignore_file.open() as f:
+                patterns = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+            
+            for pattern in patterns:
+                if fnmatch.fnmatch(str(relative_path), pattern):
+                    return True
+
+    return False
 
 
 class RepoMap:
@@ -258,6 +279,9 @@ class RepoMap:
                         self.io.tool_error(f"Repo-map can't include {fname}, it no longer exists")
 
                 self.warned_files.add(fname)
+                continue
+
+            if should_ignore(fname, self.root):
                 continue
 
             # dump(fname)
